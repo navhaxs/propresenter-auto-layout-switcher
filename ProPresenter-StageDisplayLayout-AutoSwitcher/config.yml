@@ -1,0 +1,5 @@
+password: "control"
+port: 61727
+song_library: "Songs"
+song_layout: "Current + Next Text"
+slides_layout: "Slides View"

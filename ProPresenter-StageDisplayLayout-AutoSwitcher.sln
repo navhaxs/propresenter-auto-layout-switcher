@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProPresenter-StageDisplayLayout-AutoSwitcher", "ProPresenter-StageDisplayLayout-AutoSwitcher\ProPresenter-StageDisplayLayout-AutoSwitcher.csproj", "{1A739C14-D97F-4FEF-B6D9-30D3FB619ADA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Logic", "Logic\Logic.csproj", "{65450E9E-A3E0-4AC6-B308-FAA67D3C5354}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1A739C14-D97F-4FEF-B6D9-30D3FB619ADA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1A739C14-D97F-4FEF-B6D9-30D3FB619ADA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1A739C14-D97F-4FEF-B6D9-30D3FB619ADA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1A739C14-D97F-4FEF-B6D9-30D3FB619ADA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{65450E9E-A3E0-4AC6-B308-FAA67D3C5354}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{65450E9E-A3E0-4AC6-B308-FAA67D3C5354}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{65450E9E-A3E0-4AC6-B308-FAA67D3C5354}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{65450E9E-A3E0-4AC6-B308-FAA67D3C5354}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
