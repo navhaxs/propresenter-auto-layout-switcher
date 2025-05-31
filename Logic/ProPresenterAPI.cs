@@ -10,14 +10,25 @@ using System.IO;
 
 public class ProPresenterAPI
 {
+    private string _port;
+    public ProPresenterAPI(string port)
+    {
+        _port = port;
+    }
+
     public JsonNode? GetCurrentPresentation()
     {
-        return JsonNode.Parse(Get("http://localhost:61727/v1/presentation/active?chunked=false"));
+        return JsonNode.Parse(Get($"http://localhost:{_port}/v1/presentation/active?chunked=false"));
+    }
+
+    public JsonNode? GetActiveLayers()
+    {
+        return JsonNode.Parse(Get($"http://localhost:{_port}/v1/status/layers?chunked=false"));
     }
 
     public Dictionary<String, String> GetLayoutMap()
     {
-        var result = Get("http://localhost:61727/v1/stage/layout_map");
+        var result = Get($"http://localhost:{_port}/v1/stage/layout_map");
         var json = (JsonArray)JsonNode.Parse(result);
         return json.ToArray().ToDictionary(
             obj => (string)obj["screen"]["name"],
@@ -27,12 +38,12 @@ public class ProPresenterAPI
 
     public void PutLayout(String data)
     {
-        Put("http://localhost:61727/v1/stage/layout_map", data);
+        Put($"http://localhost:{_port}/v1/stage/layout_map", data);
     }
 
     public List<string> GetLayouts()
     {
-        var result = Get("http://localhost:61727/v1/stage/layouts?chunked=false");
+        var result = Get($"http://localhost:{_port}/v1/stage/layouts?chunked=false");
         /*
          * Response body
 
