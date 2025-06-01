@@ -1,5 +1,4 @@
-﻿using System.Net.WebSockets;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Serilog;
 using Websocket.Client;
 
