@@ -17,6 +17,7 @@ public class ProPresenterWebsocketWatcher
     }
 
     public event EventHandler<MsgRecvdArgs>? OnMsgRecvd;
+    public event EventHandler<bool>? ConnectionStateChanged; // true = connected, false = disconnected
 
     // Start the websocket client in a non-blocking way and keep it alive via a field.
     public void Start()
@@ -35,13 +36,18 @@ public class ProPresenterWebsocketWatcher
             LostReconnectTimeout = null
         };
 
+        // On start we assume disconnected until proven connected
+        try { ConnectionStateChanged?.Invoke(this, false); } catch { }
+
         _client.DisconnectionHappened.Subscribe(info =>
         {
-            Log.Information($"DisconnectionHappened, type: {info.Type}");
+            Log.Information($"DisconnectionHappened, type: {info.Type}, info: {info.Exception.Message}");
+            try { ConnectionStateChanged?.Invoke(this, false); } catch { }
         });
         _client.ReconnectionHappened.Subscribe(info =>
         {
             Log.Information($"ReconnectionHappened, type: {info.Type}");
+            try { ConnectionStateChanged?.Invoke(this, true); } catch { }
             if (_client != null)
                 SendAuth(_client);
         });
@@ -67,6 +73,7 @@ public class ProPresenterWebsocketWatcher
         finally
         {
             _client = null;
+            try { ConnectionStateChanged?.Invoke(this, false); } catch { }
         }
     }
 

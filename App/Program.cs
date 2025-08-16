@@ -79,6 +79,18 @@ namespace ProPresenter_StageDisplayLayout_AutoSwitcher
             _api = new ProPresenterAPI(_yamlConfig["port"].ToString());
             _debounceTimer = new System.Timers.Timer(200) { AutoReset = false };
 
+            // Bridge connection status to UI
+            try
+            {
+                _watcher.ConnectionStateChanged += (_, connected) =>
+                {
+                    AppConnectionIndicator.SetConnected(connected);
+                };
+                // initial state
+                AppConnectionIndicator.SetConnected(false);
+            }
+            catch { /* ignore */ }
+
             _debounceTimer.Elapsed += (_, _) =>
             {
                 try

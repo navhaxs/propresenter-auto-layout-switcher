@@ -13,7 +13,7 @@ namespace ProPresenter_StageDisplayLayout_AutoSwitcher
         {
             _notifyIcon = new NotifyIcon
             {
-                Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application,
+                Icon = TrayIconHelper.RedDot,
                 Text = "ProPresenter Auto Layout Switcher",
                 Visible = true
             };
@@ -27,6 +27,28 @@ namespace ProPresenter_StageDisplayLayout_AutoSwitcher
 
             _notifyIcon.ContextMenuStrip = contextMenu;
             _notifyIcon.DoubleClick += (_, _) => ShowLogs();
+
+            // Subscribe to connection changes to update tray icon
+            try
+            {
+                var sync = System.Threading.SynchronizationContext.Current;
+                AppConnectionIndicator.ConnectionChanged += connected =>
+                {
+                    void Update()
+                    {
+                        _notifyIcon.Icon = connected ? TrayIconHelper.GreenDot : TrayIconHelper.RedDot;
+                        _notifyIcon.Text = connected
+                            ? "ProPresenter Auto Layout Switcher - Connected"
+                            : "ProPresenter Auto Layout Switcher - Disconnected";
+                    }
+
+                    if (sync != null)
+                        sync.Post(_ => Update(), null);
+                    else
+                        Update();
+                };
+            }
+            catch { /* ignore wiring issues */ }
 
             // Small balloon tip on start
             try
