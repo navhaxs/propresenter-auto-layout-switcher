@@ -1,174 +1,225 @@
-﻿using System.Text.Json;
+﻿using System;
+using System.IO;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 using Logic;
 using Serilog;
+using Serilog.Events;
+using Serilog.Sinks.Observable;
 using YamlDotNet.Serialization;
 
-Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
-    .CreateLogger();
-
-Log.Information("Starting...");
-
-// Load the YAML config file
-string configFilePath = @"config.yml";
-var yamlConfig = new Deserializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(configFilePath));
-
-Log.Information("Loaded config");
-
-var watcher = new ProPresenterWebsocketWatcher(yamlConfig["port"].ToString(), yamlConfig["password"].ToString());
-var api = new ProPresenterAPI(yamlConfig["port"].ToString());
-var debounceTimer = new System.Timers.Timer(200) {AutoReset = false};
-
-object lock_object = new();
-
-debounceTimer.Elapsed += (sender, args) =>
+namespace ProPresenter_StageDisplayLayout_AutoSwitcher
 {
-    Log.Information("Trigger layout change check");
-    lock (lock_object)
+    internal static class Program
     {
-        var layers_info = api.GetActiveLayers();
-        bool shouldUseSongLayout = false;
-        //"media": true,
-        //"slide": false,
-        if (layers_info["media"].ToString() == "true" && layers_info["slide"].ToString() == "false")
+        // Keep references to prevent GC while running in WinForms context
+        private static ProPresenterWebsocketWatcher? _watcher;
+        private static ProPresenterAPI? _api;
+        private static System.Timers.Timer? _debounceTimer;
+        private static readonly object _lockObject = new();
+        private static string _lastPresentationPath = string.Empty;
+        private static Dictionary<string, object>? _yamlConfig;
+
+        [STAThread]
+        private static void Main()
         {
-            shouldUseSongLayout = false;
+            InitializeLogging();
+            Log.Information("Starting application...");
+
+            try
+            {
+                LoadConfig();
+                StartCoreLogic();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to initialize core logic");
+            }
+
+            ApplicationConfiguration.Initialize();
+            Application.Run(new TrayApplicationContext());
         }
-        else
+
+        private static void InitializeLogging()
         {
-            var presentation_info = api.GetCurrentPresentation();
-            if (presentation_info == null)
+            System.IObservable<Serilog.Events.LogEvent>? logEvents = null;
+
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .WriteTo.Console()
+                .WriteTo.Observers(events => logEvents = events)
+                .CreateLogger();
+
+            // Subscribe after logger creation to ensure the stream is alive
+            try
             {
-                return;
+                logEvents?.Subscribe(SerilogUiBridge.Emit);
             }
-        
-            var presentation_path  = presentation_info["presentation"]?["presentation_path"];
-            if (presentation_path == null)
+            catch
             {
-                return;
-            }
-
-            var library = Regex.Match(presentation_path.ToString(), @"(?<=Libraries\/).+?(?=/)").Value;
-            if (library.Equals(string.Empty))
-            {
-                library = Regex.Match(presentation_path.ToString(), @"(?<=Libraries\\).+?(?=\\)").Value;
-            }
-            if (library.Equals(string.Empty))
-            {
-                return;
-            }
-
-            shouldUseSongLayout = library.Equals(yamlConfig["song_library"]);
-        }
-        
-        var target_layout = (string)(shouldUseSongLayout ? yamlConfig["song_layout"] : yamlConfig["slides_layout"]);
-
-        var layoutMap = api.GetLayoutMap();
-
-        /*
-         * [
-             {
-               "layout": {
-                 "name": "Sermon Notes"
-               },
-               "screen": {
-                 "name": "Side Screen"
-               }
-             }
-           ]
-         */
-
-        var stream = new MemoryStream();
-        var writer = new Utf8JsonWriter(stream);
-
-        writer.WriteStartArray();
-
-        foreach (var screen in layoutMap)
-        {
-            if (screen.Value != target_layout)
-            {
-                Log.Information($"Changing layout for screen [{screen.Key}] to [{target_layout}]");
-
-                writer.WriteStartObject();
-
-                writer.WriteStartObject("screen");
-                writer.WriteString("name", screen.Key);
-                writer.WriteEndObject();
-
-                writer.WriteStartObject("layout");
-                writer.WriteString("name", target_layout);
-                writer.WriteEndObject();
-
-                writer.WriteEndObject();
+                // Ignore subscription errors
             }
         }
 
-        writer.WriteEndArray();
-        writer.Flush();
-        stream.Flush();
+        private static void LoadConfig()
+        {
+            // Load the YAML config file
+            const string configFilePath = "config.yml";
+            _yamlConfig = new Deserializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(configFilePath));
+            Log.Information("Loaded config");
+        }
 
-        stream.Seek(0, SeekOrigin.Begin);
-        using StreamReader reader = new StreamReader(stream);
-        string jsonString = reader.ReadToEnd();
+        private static void StartCoreLogic()
+        {
+            if (_yamlConfig == null) throw new InvalidOperationException("Config not loaded");
 
-        api.PutLayout(jsonString);
+            _watcher = new ProPresenterWebsocketWatcher(_yamlConfig["port"].ToString(), _yamlConfig["password"].ToString());
+            _api = new ProPresenterAPI(_yamlConfig["port"].ToString());
+            _debounceTimer = new System.Timers.Timer(200) { AutoReset = false };
+
+            _debounceTimer.Elapsed += (_, _) =>
+            {
+                try
+                {
+                    Log.Information("Trigger layout change check");
+                    lock (_lockObject)
+                    {
+                        var layers_info = _api!.GetActiveLayers();
+                        bool shouldUseSongLayout = false;
+                        //"media": true,
+                        //"slide": false,
+                        if (layers_info["media"].ToString() == "true" && layers_info["slide"].ToString() == "false")
+                        {
+                            shouldUseSongLayout = false;
+                        }
+                        else
+                        {
+                            var presentation_info = _api.GetCurrentPresentation();
+                            if (presentation_info == null)
+                            {
+                                return;
+                            }
+
+                            var presentation_path = presentation_info["presentation"]?["presentation_path"];
+                            if (presentation_path == null)
+                            {
+                                return;
+                            }
+
+                            var library = Regex.Match(presentation_path.ToString(), @"(?<=Libraries\/).+?(?=/)").Value;
+                            if (library.Equals(string.Empty))
+                            {
+                                library = Regex.Match(presentation_path.ToString(), @"(?<=Libraries\\\\).+?(?=\\\\)").Value;
+                            }
+                            if (library.Equals(string.Empty))
+                            {
+                                return;
+                            }
+
+                            shouldUseSongLayout = library.Equals(_yamlConfig["song_library"]);
+                        }
+
+                        var target_layout = (string)(shouldUseSongLayout ? _yamlConfig["song_layout"] : _yamlConfig["slides_layout"]);
+
+                        var layoutMap = _api.GetLayoutMap();
+
+                        var stream = new MemoryStream();
+                        var writer = new Utf8JsonWriter(stream);
+
+                        writer.WriteStartArray();
+
+                        foreach (var screen in layoutMap)
+                        {
+                            if (screen.Value != target_layout)
+                            {
+                                Log.Information($"Changing layout for screen [{screen.Key}] to [{target_layout}]");
+
+                                writer.WriteStartObject();
+
+                                writer.WriteStartObject("screen");
+                                writer.WriteString("name", screen.Key);
+                                writer.WriteEndObject();
+
+                                writer.WriteStartObject("layout");
+                                writer.WriteString("name", target_layout);
+                                writer.WriteEndObject();
+
+                                writer.WriteEndObject();
+                            }
+                        }
+
+                        writer.WriteEndArray();
+                        writer.Flush();
+                        stream.Flush();
+
+                        stream.Seek(0, SeekOrigin.Begin);
+                        using StreamReader reader = new StreamReader(stream);
+                        string jsonString = reader.ReadToEnd();
+
+                        _api.PutLayout(jsonString);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Error during layout change check");
+                }
+            };
+
+            _watcher.OnMsgRecvd += (_, args) =>
+            {
+                try
+                {
+                    var message = JsonNode.Parse(args.msg);
+                    if (message?["action"] == null)
+                    {
+                        return;
+                    }
+
+                    var action = message["action"]!.ToString();
+
+                    switch (action)
+                    {
+                        case "presentationTriggerIndex":
+                        {
+                            var currentPresentationPath = message["presentationPath"]?.ToString();
+                            if (currentPresentationPath == null || _lastPresentationPath.Equals(currentPresentationPath))
+                            {
+                                return;
+                            }
+
+                            _lastPresentationPath = currentPresentationPath;
+                            break;
+                        }
+                        case "authenticate":
+                        {
+                            if (message["authenticated"]!.ToString() != "1")
+                            {
+                                return;
+                            }
+
+                            _lastPresentationPath = string.Empty;
+                            break;
+                        }
+                        case "clearText":
+                        case "clearVideo":
+                            _lastPresentationPath = string.Empty;
+                            break;
+                        default:
+                            return;
+                    }
+
+                    _debounceTimer!.Stop();
+                    _debounceTimer.Start();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Error handling websocket message");
+                }
+            };
+
+            _watcher.Start();
+        }
     }
-};
-
-var lastPresentationPath = "";
-watcher.OnMsgRecvd += (sender, args) =>
-{
-    /*
-      {
-        "action": "presentationTriggerIndex",
-        "slideIndex": 11,
-        "presentationDestination": 0,
-        "presentationPath": "1:6"
-      }
-    */
-    var message = JsonNode.Parse(args.msg);
-    if (message?["action"] == null)
-    {
-        return;
-    }
-    
-    var action = message["action"].ToString();
-
-    switch (action)
-    {
-        case "presentationTriggerIndex":
-        {
-            var currentPresentationPath = message["presentationPath"]?.ToString();
-            if (currentPresentationPath == null || lastPresentationPath.Equals(currentPresentationPath))
-            {
-                return;
-            }
-
-            lastPresentationPath = currentPresentationPath;
-            break;
-        }
-        case "authenticate":
-        {
-            if (message["authenticated"].ToString() != "1")
-            {
-                return;
-            }
-
-            lastPresentationPath = "";
-            break;
-        }
-        case "clearText":
-        case "clearVideo":
-            lastPresentationPath = "";
-            break;
-        default:
-            return;
-    }
-
-    debounceTimer.Stop();
-    debounceTimer.Start();
-};
-
-watcher.Start();
+}

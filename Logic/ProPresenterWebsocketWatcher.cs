@@ -6,8 +6,9 @@ namespace Logic;
 
 public class ProPresenterWebsocketWatcher
 {
-    private string _port;
-    private string _password;
+    private readonly string _port;
+    private readonly string _password;
+    private WebsocketClient? _client;
 
     public ProPresenterWebsocketWatcher(string port, string password)
     {
@@ -15,36 +16,58 @@ public class ProPresenterWebsocketWatcher
         _password = password;
     }
 
-    public event EventHandler<MsgRecvdArgs> OnMsgRecvd;
+    public event EventHandler<MsgRecvdArgs>? OnMsgRecvd;
 
+    // Start the websocket client in a non-blocking way and keep it alive via a field.
     public void Start()
     {
-        var exitEvent = new ManualResetEvent(false);
-        var url = new Uri($"ws://localhost:{_port}/remote");
+        if (_client != null)
+        {
+            // Already started
+            return;
+        }
 
-        using var client = new WebsocketClient(url);
-        
-        client.ReconnectTimeout = null; 
-        client.ErrorReconnectTimeout = TimeSpan.FromSeconds(30);
-        client.LostReconnectTimeout = null;
-        
-        client.DisconnectionHappened.Subscribe(info =>
+        var url = new Uri($"ws://localhost:{_port}/remote");
+        _client = new WebsocketClient(url)
+        {
+            ReconnectTimeout = null,
+            ErrorReconnectTimeout = TimeSpan.FromSeconds(30),
+            LostReconnectTimeout = null
+        };
+
+        _client.DisconnectionHappened.Subscribe(info =>
         {
             Log.Information($"DisconnectionHappened, type: {info.Type}");
         });
-        client.ReconnectionHappened.Subscribe(info =>
+        _client.ReconnectionHappened.Subscribe(info =>
         {
             Log.Information($"ReconnectionHappened, type: {info.Type}");
-            SendAuth(client);
+            if (_client != null)
+                SendAuth(_client);
         });
-        client.MessageReceived.Subscribe(msg =>
+        _client.MessageReceived.Subscribe(msg =>
         {
             Log.Information($"Message received: {msg}");
             OnMsgRecvd?.Invoke(this, new MsgRecvdArgs { msg = msg.Text });
         });
-        client.Start();
 
-        exitEvent.WaitOne();
+        _client.Start();
+    }
+
+    public void Stop()
+    {
+        try
+        {
+            _client?.Dispose();
+        }
+        catch
+        {
+            // ignore dispose errors
+        }
+        finally
+        {
+            _client = null;
+        }
     }
 
     private void SendAuth(WebsocketClient client)
@@ -64,8 +87,7 @@ public class ProPresenterWebsocketWatcher
     }
 
     public class MsgRecvdArgs : EventArgs
-
     {
-        public string msg { get; set; }
+        public string msg { get; set; } = string.Empty;
     }
 }
