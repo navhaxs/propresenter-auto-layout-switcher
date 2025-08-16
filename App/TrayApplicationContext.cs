@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace ProPresenter_StageDisplayLayout_AutoSwitcher
@@ -8,6 +9,23 @@ namespace ProPresenter_StageDisplayLayout_AutoSwitcher
     {
         private readonly NotifyIcon _notifyIcon;
         private LogForm? _logForm;
+
+        // Static reference to marshal external UI requests (like single-instance show logs)
+        private static SynchronizationContext? s_sync;
+        private static TrayApplicationContext? s_instance;
+
+        public static void RequestShowLogs()
+        {
+            var inst = s_instance;
+            if (inst == null) return;
+
+            void Do() { inst.ShowLogs(); }
+
+            if (s_sync != null)
+                s_sync.Post(_ => Do(), null);
+            else
+                Do();
+        }
 
         public TrayApplicationContext()
         {
@@ -58,6 +76,14 @@ namespace ProPresenter_StageDisplayLayout_AutoSwitcher
                 _notifyIcon.ShowBalloonTip(3000);
             }
             catch { /* ignore if balloon not supported */ }
+
+            // Expose this instance for cross-process UI requests
+            try
+            {
+                s_sync = SynchronizationContext.Current;
+                s_instance = this;
+            }
+            catch { /* ignore */ }
         }
 
         private void ShowLogs()

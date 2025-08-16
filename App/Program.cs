@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Windows.Forms;
 using Logic;
 using Serilog;
@@ -22,9 +23,20 @@ namespace ProPresenter_StageDisplayLayout_AutoSwitcher
         private static string _lastPresentationPath = string.Empty;
         private static Dictionary<string, object>? _yamlConfig;
 
+        // Single-instance synchronization primitives
+        private static Mutex? _singleInstanceMutex;
+        private static EventWaitHandle? _showLogsEvent;
+        private static RegisteredWaitHandle? _showLogsWaitHandle;
+        private const string MutexName = "Local\\ProPresenterAutoLayoutSwitcher_SingleInstance";
+        private const string ShowLogsEventName = "Local\\ProPresenterAutoLayoutSwitcher_ShowLogs";
+
         [STAThread]
         private static void Main()
         {
+            // Ensure only one instance is running. If another is running, signal it to show logs and exit.
+            if (!EnsureSingleInstance())
+                return;
+
             InitializeLogging();
             Log.Information("Starting application...");
 
@@ -39,6 +51,7 @@ namespace ProPresenter_StageDisplayLayout_AutoSwitcher
             }
 
             ApplicationConfiguration.Initialize();
+            Application.ApplicationExit += (_, _) => CleanupSingleInstance();
             Application.Run(new TrayApplicationContext());
         }
 
@@ -233,5 +246,45 @@ namespace ProPresenter_StageDisplayLayout_AutoSwitcher
 
             _watcher.Start();
         }
+
+        private static bool EnsureSingleInstance()
+        {
+            try
+            {
+                _singleInstanceMutex = new Mutex(initiallyOwned: true, name: MutexName, createdNew: out bool createdNew);
+                _showLogsEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowLogsEventName, out _);
+                if (!createdNew)
+                {
+                    try { _showLogsEvent.Set(); } catch { }
+                    return false;
+                }
+                _showLogsWaitHandle = ThreadPool.RegisterWaitForSingleObject(
+                    _showLogsEvent!,
+                    new WaitOrTimerCallback((state, timedOut) =>
+                    {
+                        try { TrayApplicationContext.RequestShowLogs(); } catch { }
+                    }),
+                    null,
+                    Timeout.Infinite,
+                    false);
+                return true;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        private static void CleanupSingleInstance()
+        {
+            try { _showLogsWaitHandle?.Unregister(null); } catch { }
+            _showLogsWaitHandle = null;
+            try { _showLogsEvent?.Dispose(); } catch { }
+            _showLogsEvent = null;
+            try { _singleInstanceMutex?.ReleaseMutex(); } catch { }
+            try { _singleInstanceMutex?.Dispose(); } catch { }
+            _singleInstanceMutex = null;
+        }
     }
+
 }
