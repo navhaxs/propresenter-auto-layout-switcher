@@ -133,11 +133,7 @@ namespace ProPresenter_StageDisplayLayout_AutoSwitcher
                                 return;
                             }
 
-                            var library = Regex.Match(presentation_path.ToString(), @"(?<=Libraries\/).+?(?=/)").Value;
-                            if (library.Equals(string.Empty))
-                            {
-                                library = Regex.Match(presentation_path.ToString(), @"(?<=Libraries\\\\).+?(?=\\\\)").Value;
-                            }
+                            var library = StringUtil.ExtractLibraryNameFromPath(presentation_path.ToString());
                             if (library.Equals(string.Empty))
                             {
                                 return;

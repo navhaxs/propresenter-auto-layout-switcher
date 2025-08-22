@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "App", "App\App.csproj", "{1
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Logic", "Logic\Logic.csproj", "{65450E9E-A3E0-4AC6-B308-FAA67D3C5354}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "App.Tests", "App.Tests\App.Tests.csproj", "{F129BEEE-054C-439C-B831-B640D5D44479}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{65450E9E-A3E0-4AC6-B308-FAA67D3C5354}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{65450E9E-A3E0-4AC6-B308-FAA67D3C5354}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{65450E9E-A3E0-4AC6-B308-FAA67D3C5354}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F129BEEE-054C-439C-B831-B640D5D44479}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F129BEEE-054C-439C-B831-B640D5D44479}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F129BEEE-054C-439C-B831-B640D5D44479}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F129BEEE-054C-439C-B831-B640D5D44479}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
